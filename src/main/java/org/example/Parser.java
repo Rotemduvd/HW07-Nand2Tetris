@@ -7,10 +7,10 @@ import java.util.List;
 import java.util.Scanner;
 
 public class Parser {
-    private static List<String> CmdOnly;
-    private static int currLineInd = -1;
-    public static String line;
-    static String command;
+    private  List<String> CmdOnly;
+    private  int currLineInd;
+    public String line;
+    private String command;
 
     // Constructor: Reads the file and initializes commands
     public Parser(String filePath) throws FileNotFoundException {
@@ -26,14 +26,14 @@ public class Parser {
                 continue;
             }
 
-            temp = temp.replaceAll("\\s+", ""); // Remove all whitespaces
+            temp = temp.replaceAll("\t", "").trim(); // Remove all whitespaces
             CmdOnly.add(temp);
         }
         scanner.close();
     }
 
     // Reset parser to allow reprocessing
-    public static void reset() {
+    public void reset() {
         currLineInd = -1; // Reset the current line index
         line = null;      // Clear the current line
         command = null; // Clear the current command type
@@ -41,21 +41,22 @@ public class Parser {
     }
 
     // Checks if there are more lines to process
-    public static boolean hasMoreLines() {
+    public boolean hasMoreLines() {
         return currLineInd < CmdOnly.size() - 1;
     }
 
     // Advances to the next line and updates the current line
-    public static void advance() {
+    public void advance() {
         if (hasMoreLines()) {
             currLineInd++;
             line = CmdOnly.get(currLineInd);
+            System.out.println("Processing command: " + line);
         } else {
             throw new IllegalStateException("No more lines to read.");
         }
     }
 
-    public static String commandType(){
+    public String commandType(){
         if (line.startsWith("push")){
             command = "C_PUSH";
         } else if (line.startsWith("pop")){
@@ -66,11 +67,21 @@ public class Parser {
         return command;
     }
 
-    public static void arg1(){
-
+    public String arg1(){
+        if (command.equals("C_ARITHMETIC")){
+            return command;
+        } else {
+            String[] args = line.split(" ");
+            return args[1];
+        }
     }
 
-    public static void arg2(){
-
+    public Integer arg2() throws IllegalArgumentException{
+        if (command.equals("C_PUSH") || command.equals("C_POP")){
+            String[] args = line.split(" ");
+            return Integer.parseInt(args[2]);
+        } else {
+            throw new IllegalArgumentException("Invalid command type: " + command);
+        }
     }
 }
