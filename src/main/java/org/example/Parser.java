@@ -50,7 +50,7 @@ public class Parser {
         if (hasMoreLines()) {
             currLineInd++;
             line = CmdOnly.get(currLineInd);
-            System.out.println("Processing command: " + line);
+            //System.out.println("Processing command: " + line);
         } else {
             throw new IllegalStateException("No more lines to read.");
         }
@@ -69,7 +69,7 @@ public class Parser {
 
     public String arg1(){
         if (command.equals("C_ARITHMETIC")){
-            return command;
+            return line;
         } else {
             String[] args = line.split(" ");
             return args[1];

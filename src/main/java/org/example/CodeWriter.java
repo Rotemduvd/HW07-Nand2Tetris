@@ -7,6 +7,7 @@ import java.nio.file.Paths;
 public class CodeWriter {
     private final FileWriter output;
     private final String fileName;
+    private int labelCount = 0;
 
     public CodeWriter(String filePath) throws IOException {
         String outputFilePath = filePath.replace(".vm", ".asm");
@@ -14,110 +15,196 @@ public class CodeWriter {
         fileName = Paths.get(filePath).getFileName().toString().replaceAll("\\.vm$", "");
     }
 
-    private void writeArithmetic(String command) throws IOException {
+    public void writeArithmetic(String command) throws IOException {
+        output.write("// " + command + "\n");
 
+        if (command.equals("add")) {
+            output.write("@SP\n");
+            output.write("A=M\n");
+            output.write("A=A-1\n");
+            output.write("A=A-1\n");
+            output.write("D=M\n");
+            output.write("A=A+1\n");
+            output.write("D=D+M\n");
+            output.write("@SP\n");
+            output.write("M=M-1\n");
+            output.write("M=M-1\n");
+            output.write("A=M\n");
+            output.write("M=D\n");
+            output.write("@SP\n");
+            output.write("M=M+1\n");
+        } else if (command.equals("sub")) {
+            output.write("@SP\n");
+            output.write("A=M\n");
+            output.write("A=A-1\n");
+            output.write("A=A-1\n");
+            output.write("D=M\n");
+            output.write("A=A+1\n");
+            output.write("D=D-M\n");
+            output.write("@SP\n");
+            output.write("M=M-1\n");
+            output.write("M=M-1\n");
+            output.write("A=M\n");
+            output.write("M=D\n");
+            output.write("@SP\n");
+            output.write("M=M+1\n");
+        } else if (command.equals("neg")) {
+            output.write("@SP\n");
+            output.write("A=M-1\n");
+            output.write("M=-M\n");
+        } else if (command.equals("eq") || command.equals("gt") || command.equals("lt")) {
+            String jumpType = switch (command) {
+                case "eq" -> "JEQ";
+                case "gt" -> "JGT";
+                case "lt" -> "JLT";
+                default -> throw new IllegalArgumentException("Invalid command: " + command);
+            };
+
+            String trueLabel = "TRUE_" + labelCount;
+            String endLabel = "END_" + labelCount;
+            labelCount++;
+
+            output.write("@SP\n");
+            output.write("M=M-1\n");
+            output.write("A=M\n");
+            output.write("D=M\n");
+            output.write("@SP\n");
+            output.write("M=M-1\n");
+            output.write("A=M\n");
+            output.write("D=M-D\n");
+            output.write("@" + trueLabel + "\n");
+            output.write("D;" + jumpType + "\n");
+            output.write("@SP\n");
+            output.write("A=M\n");
+            output.write("M=0\n");
+            output.write("@" + endLabel + "\n");
+            output.write("0;JMP\n");
+            output.write("(" + trueLabel + ")\n");
+            output.write("@SP\n");
+            output.write("A=M\n");
+            output.write("M=-1\n");
+            output.write("(" + endLabel + ")\n");
+            output.write("@SP\n");
+            output.write("M=M+1\n");
+        } else if (command.equals("and") || command.equals("or")) {
+            output.write("@SP\n");
+            output.write("M=M-1\n");
+            output.write("A=M\n");
+            output.write("D=M\n");
+            output.write("@SP\n");
+            output.write("M=M-1\n");
+            output.write("A=M\n");
+
+            String op = command.equals("and") ? "&" : "|";
+            output.write("M=D" + op + "M\n");
+
+            output.write("@SP\n");
+            output.write("M=M+1\n");
+        } else if (command.equals("not")) {
+            output.write("@SP\n");
+            output.write("A=M-1\n");
+            output.write("M=!M\n");
+        }
     }
 
-    private void writePushPop(String command, String segment, Integer index) throws IOException {
-        boolean b = segment.equals("local") || segment.equals("argument") || segment.equals("this") || segment.equals("that");
+    public void writePushPop(String command, String segment, Integer index) throws IOException {
+        output.write("// " + command + " " + segment + " " + index + "\n");
 
         if (command.equals("C_PUSH")) {
-            output.write("// push " + segment + " " + index + "\n");
-
             if (segment.equals("constant")) {
-                output.write("@" + index + "\n"); // Load constant
-                output.write("D=A\n");           // D = constant
-                commonPush();                   // Perform common push operation
-            } else if (b) {
-                output.write("@" + shortenSeg(segment) + "\n"); // Load base address
-                output.write("D=M\n");                          // D = base address
-                output.write("@" + index + "\n");               // Load index
-                output.write("A=D+A\n");                        // A = base + index
-                output.write("D=M\n");                          // D = RAM[base + index]
-                commonPush();                                   // Perform common push operation
-            } else if (segment.equals("temp")) {
-                output.write("@" + (5 + index) + "\n");         // Temp segment starts at R5
-                output.write("D=M\n");                          // D = RAM[temp + index]
-                commonPush();                                   // Perform common push operation
+                output.write("@" + index + "\n");
+                output.write("D=A\n");
             } else if (segment.equals("static")) {
-                output.write("@" + fileName + "." + index + "\n"); // Static variable
-                output.write("D=M\n");                            // D = RAM[static variable]
-                commonPush();                                     // Perform common push operation
+                output.write("@" + fileName + index + "\n");
+                output.write("D=M\n");
             } else if (segment.equals("pointer")) {
-                if (index == 0) {
-                    output.write("@THIS\n"); // Load THIS
-                } else if (index == 1) {
-                    output.write("@THAT\n"); // Load THAT
-                }
-                output.write("D=M\n");        // D = RAM[THIS/THAT]
-                commonPush();                // Perform common push operation
+                output.write("@" + (index == 0 ? "THIS" : "THAT") + "\n");
+                output.write("D=M\n");
+            } else if (segment.equals("local") || segment.equals("argument") || segment.equals("this") || segment.equals("that")) {
+                output.write("@" + shortenSeg(segment) + "\n");
+                output.write("D=M\n");
+                output.write("@" + index + "\n");
+                output.write("A=D+A\n");
+                output.write("D=M\n");
+            } else if (segment.equals("temp")) {
+                output.write("@" + (5 + index) + "\n");
+                output.write("D=M\n");
             }
 
+            // Push the value onto the stack
+            output.write("@SP\n");
+            output.write("A=M\n");
+            output.write("M=D\n");
+            output.write("@SP\n");
+            output.write("M=M+1\n");
+
         } else if (command.equals("C_POP")) {
-            if (b) {
-                output.write("// pop " + segment + " " + index + "\n");
-                output.write("@" + shortenSeg(segment) + "\n");
-                output.write("D=M\n");                               // D = base address
-                output.write("@" + index + "\n");                    // Load index
-                output.write("D=D+A\n");                             // D = base + index
-                commonPop();                                         // Perform common pop operation
-            } else if (segment.equals("temp")) {
-                output.write("// pop temp " + index + "\n");
-                output.write("@" + (5 + index) + "\n");              // Temp segment starts at R5
-                output.write("D=A\n");                               // D = address of temp + index
-                commonPop();                                         // Perform common pop operation
-            } else if (segment.equals("static")) {
-                output.write("// pop static " + index + "\n");
-                output.write("@SP\n");                               // Load stack pointer
-                output.write("AM=M-1\n");                            // SP--, A = RAM[SP]
-                output.write("D=M\n");                               // D = RAM[SP]
-                output.write("@" + fileName + "." + index + "\n");   // Static variable
-                output.write("M=D\n");                               // RAM[static variable] = D
+            if (segment.equals("static")) {
+                output.write("@" + fileName + index + "\n");
+                output.write("D=A\n");
+                output.write("@R13\n");
+                output.write("M=D\n");
+                output.write("@SP\n");
+                output.write("M=M-1\n");
+                output.write("A=M\n");
+                output.write("D=M\n");
+                output.write("@R13\n");
+                output.write("A=M\n");
+                output.write("M=D\n");
             } else if (segment.equals("pointer")) {
-                output.write("// pop pointer " + index + "\n");
-                output.write("@SP\n");                               // Load stack pointer
-                output.write("AM=M-1\n");                            // SP--, A = RAM[SP]
-                output.write("D=M\n");                               // D = RAM[SP]
-                if (index == 0) {
-                    output.write("@THIS\n");
-                } else if (index == 1) {
-                    output.write("@THAT\n");
-                }
-                output.write("M=D\n");                               // RAM[THIS/THAT] = D
+                output.write("@SP\n");
+                output.write("M=M-1\n");
+                output.write("A=M\n");
+                output.write("D=M\n");
+                output.write("@" + (index == 0 ? "THIS" : "THAT") + "\n");
+                output.write("M=D\n");
+            } else if (segment.equals("local") || segment.equals("argument") || segment.equals("this") || segment.equals("that")) {
+                output.write("@" + index + "\n");
+                output.write("D=A\n");
+                output.write("@" + shortenSeg(segment) + "\n");
+                output.write("A=M\n");
+                output.write("D=D+A\n");
+                output.write("@R13\n");
+                output.write("M=D\n");
+                output.write("@SP\n");
+                output.write("M=M-1\n");
+                output.write("A=M\n");
+                output.write("D=M\n");
+                output.write("@R13\n");
+                output.write("A=M\n");
+                output.write("M=D\n");
+            } else if (segment.equals("temp")) {
+                output.write("@" + index + "\n");
+                output.write("D=A\n");
+                output.write("@5\n");
+                output.write("D=D+A\n");
+                output.write("@R13\n");
+                output.write("M=D\n");
+                output.write("@SP\n");
+                output.write("M=M-1\n");
+                output.write("A=M\n");
+                output.write("D=M\n");
+                output.write("@R13\n");
+                output.write("A=M\n");
+                output.write("M=D\n");
             }
         }
     }
 
-    private void commonPush() throws IOException {
-        output.write("@SP\n");           // Load stack pointer
-        output.write("A=M\n");           // A = RAM[SP]
-        output.write("M=D\n");           // RAM[SP] = D
-        output.write("@SP\n");           // Increment SP
-        output.write("M=M+1\n");
-    }
-
-    private void commonPop() throws IOException {
-        output.write("@R13\n");          // Temporary register
-        output.write("M=D\n");           // R13 = target address
-        output.write("@SP\n");           // Load stack pointer
-        output.write("AM=M-1\n");        // SP--, A = RAM[SP]
-        output.write("D=M\n");           // D = RAM[SP]
-        output.write("@R13\n");          // Load target address
-        output.write("A=M\n");           // A = RAM[target]
-        output.write("M=D\n");           // RAM[target] = D
-    }
-
-
-
 
     private String shortenSeg(String segment){
-            return switch (segment) {
-                case "local" -> "LCL";
-                case "argument" -> "ARG";
-                case "this" -> "THIS";
-                case "that" -> "THAT";
-                default -> throw new IllegalArgumentException("Invalid segment: " + segment);
-            };
+        return switch (segment) {
+            case "local" -> "LCL";
+            case "argument" -> "ARG";
+            case "this" -> "THIS";
+            case "that" -> "THAT";
+            default -> throw new IllegalArgumentException("Invalid segment: " + segment);
+        };
+    }
+
+    public void close() throws IOException {
+        if (output != null) {
+            output.close();
+        }
     }
 }
-
