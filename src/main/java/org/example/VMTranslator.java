@@ -7,7 +7,7 @@ public class VMTranslator {
 
     public static void main(String[] args) {
         if (args.length != 1) {
-            System.err.println("Please add the VM filepath or directory.");
+            System.err.println("Usage: java VMTranslator source");
             System.exit(1);
         }
 
@@ -18,15 +18,26 @@ public class VMTranslator {
             CodeWriter codeWriter;
 
             if (inputFile.isDirectory()) {
+                // Handle directory
                 File[] vmFiles = inputFile.listFiles((dir, name) -> name.endsWith(".vm"));
                 if (vmFiles == null || vmFiles.length == 0) {
                     throw new IllegalArgumentException("No .vm files found in the directory.");
                 }
 
+                // Determine output file name based on folder name
                 String outputFilePath = inputPath.endsWith("/") ? inputPath : inputPath + "/";
                 outputFilePath += new File(inputPath).getName() + ".asm";
                 codeWriter = new CodeWriter(outputFilePath);
 
+                // Check if Sys.vm exists in the directory
+                boolean hasSysInit = containsSys(vmFiles);
+
+                // Generate bootstrap code only for directories
+                if (hasSysInit) {
+                    codeWriter.writeBootstrap();
+                }
+
+                // Process each .vm file
                 for (File vmFile : vmFiles) {
                     Parser parser = new Parser(vmFile.getPath());
                     codeWriter.setFileName(vmFile.getName());
@@ -37,15 +48,23 @@ public class VMTranslator {
                     }
                 }
             } else {
-                codeWriter = new CodeWriter(inputPath.replace(".vm", ".asm"));
+                // Handle single .vm file
+                if (!inputFile.getName().endsWith(".vm")) {
+                    throw new IllegalArgumentException("Input must be a .vm file or a directory.");
+                }
+
+                String outputFilePath = inputPath.replace(".vm", ".asm");
+                codeWriter = new CodeWriter(outputFilePath);
                 Parser parser = new Parser(inputPath);
 
+                // Single file: No bootstrap code is needed
                 while (parser.hasMoreLines()) {
                     parser.advance();
                     processCommand(parser, codeWriter);
                 }
             }
 
+            // Close the writer
             codeWriter.close();
         } catch (IOException e) {
             System.err.println("Error processing file: " + e.getMessage());
@@ -94,5 +113,14 @@ public class VMTranslator {
             default:
                 throw new IllegalArgumentException("Unknown command type: " + commandType);
         }
+    }
+
+    private static boolean containsSys(File[] vmFiles) {
+        for (File vmFile : vmFiles) {
+            if (vmFile.getName().equals("Sys.vm")) {
+                return true;
+            }
+        }
+        return false;
     }
 }

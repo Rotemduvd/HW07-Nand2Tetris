@@ -8,7 +8,6 @@ public class CodeWriter {
     private final FileWriter output;
     private String fileName;
     private int labelCount = 0;
-    private int funcLabelCount = 0;
     private int callLabelCount = 0;
 
 
@@ -107,6 +106,8 @@ public class CodeWriter {
             output.write("@SP\n");
             output.write("A=M-1\n");
             output.write("M=!M\n");
+            //output.write("@SP\n");
+           // output.write("M=M+1\n");
         }
     }
 
@@ -139,14 +140,16 @@ public class CodeWriter {
                 output.write("D=D+A\n");  // Add offset
                 output.write("A=D\n");  // Final address
                 output.write("D=M\n");  // Get value at address
-                commonPush();
+
             } else {
                 // Push local, argument, this, or that
                 output.write("@" + index + "\n");
                 output.write("D=A\n");
                 output.write("@" + shortenSeg(segment) + "\n");
-                output.write("A=D+M\n");
-                output.write("D=M\n");
+                output.write("A=M\n");     // Dereference base pointer
+                output.write("D=D+A\n");   // Add offset
+                output.write("A=D\n");     // Get the target address
+                output.write("D=M\n");     // Read value at target address
             }
             commonPush();
 
@@ -219,9 +222,10 @@ public class CodeWriter {
                 output.write("@" + index + "\n");
                 output.write("D=A\n");
                 output.write("@" + shortenSeg(segment) + "\n");
-                output.write("D=D+M\n");
+                output.write("A=M\n");     // Dereference base pointer
+                output.write("D=D+A\n");   // Add offset
                 output.write("@R13\n");
-                output.write("M=D\n");
+                output.write("M=D\n");     // Store target address in R13
                 output.write("@SP\n");
                 output.write("M=M-1\n");
                 output.write("A=M\n");
@@ -266,39 +270,13 @@ public class CodeWriter {
         //function entry point
         output.write("(" + function + ")\n");
 
-        //save nArgs in order to create nArg push 0's
-        output.write("@" + nArgs + "\n");
-        output.write("D=A\n");
-        output.write("@R13\n");
-        output.write("M=D\n");
-
-        String loopLabel = "PUSH_ZERO" + funcLabelCount;
-        String endLabel = "END_PUSH" + funcLabelCount;
-        funcLabelCount++;
-
-        output.write("(" + loopLabel + ")\n");
-        output.write("@R13\n");
-        output.write("D=M\n");
-        output.write("@" + endLabel + "\n");
-        output.write("D;JEQ\n");
-
-        // Push 0 onto the stack
-        output.write("@0\n");
-        output.write("D=A\n");
-        output.write("@SP\n");
-        output.write("A=M\n");
-        output.write("M=D\n");
-        output.write("@SP\n");
-        output.write("M=M+1\n");
-
-        // Decrement the counter
-        output.write("@R13\n");
-        output.write("M=M-1\n");
-
-        // Jump back to the loop
-        output.write("@" + loopLabel + "\n");
-        output.write("0;JMP\n");
-        output.write("(" + endLabel + ")\n");
+        for (int i = 0; i < nArgs; i++) {
+            output.write("@SP\n");
+            output.write("A=M\n");
+            output.write("M=0\n");
+            output.write("@SP\n");
+            output.write("M=M+1\n");
+        }
     }
 
     void writeCall(String function, Integer nArgs) throws IOException {
@@ -311,16 +289,25 @@ public class CodeWriter {
         commonPush();
 
         // Push LCL
-        writePushPop("C_PUSH", "local", 0);
+        output.write("@LCL\n");
+        output.write("D=M\n");
+        commonPush();
 
         // Push ARG
-        writePushPop("C_PUSH", "argument", 0);
+        output.write("@ARG\n");
+        output.write("D=M\n");
+        commonPush();
 
         // Push THIS
-        writePushPop("C_PUSH", "this", 0);
+        output.write("@THIS\n");
+        output.write("D=M\n");
+        commonPush();
 
         // Push THAT
-        writePushPop("C_PUSH", "that", 0);
+        output.write("@THAT\n");
+        output.write("D=M\n");
+        commonPush();
+
 
         // Reposition ARG
         output.write("// ARG = SP - 5 - nArgs\n");
@@ -350,61 +337,68 @@ public class CodeWriter {
     }
 
     void writeReturn() throws IOException {
-        // endFrame = LCL
-        output.write("@LCL\n");
-        output.write("D=M\n");
-        output.write("@R13\n");
-        output.write("M=D\n");
+            output.write("// return\n");
 
-        // retAddr = *(FRAME - 5)
-        output.write("@5\n");
-        output.write("A=D-A\n");
-        output.write("D=M\n");
-        output.write("@R14\n");
-        output.write("M=D\n");
+            // FRAME = LCL
+            output.write("@LCL\n");
+            output.write("D=M\n");
+            output.write("@FRAME\n");
+            output.write("M=D\n");
 
-        // *ARG = pop()
-        writePushPop("C_POP", "argument", 0);
+            // RET = *(FRAME - 5)
+            output.write("@5\n");
+            output.write("A=D-A\n"); // A = FRAME - 5
+            output.write("D=M\n");   // D = RET
+            output.write("@RET\n");
+            output.write("M=D\n");
 
-        // SP = ARG + 1
-        output.write("@ARG\n");
-        output.write("D=M+1\n");
-        output.write("@SP\n");
-        output.write("M=D\n");
+            // *ARG = pop()
+            output.write("@SP\n");
+            output.write("AM=M-1\n"); // SP--
+            output.write("D=M\n");    // D = pop()
+            output.write("@ARG\n");
+            output.write("A=M\n");
+            output.write("M=D\n");    // *ARG = return value
 
-        // Restore THAT
-        output.write("@R13\n");
-        output.write("AM=M-1\n");
-        output.write("D=M\n");
-        output.write("@THAT\n");
-        output.write("M=D\n");
+            // SP = ARG + 1
+            output.write("@ARG\n");
+            output.write("D=M+1\n");  // D = ARG + 1
+            output.write("@SP\n");
+            output.write("M=D\n");    // SP = ARG + 1
 
-        // Restore THIS
-        output.write("@R13\n");
-        output.write("AM=M-1\n");
-        output.write("D=M\n");
-        output.write("@THIS\n");
-        output.write("M=D\n");
+            // Restore THAT = *(FRAME - 1)
+            output.write("@FRAME\n");
+            output.write("AM=M-1\n"); // FRAME = FRAME - 1
+            output.write("D=M\n");
+            output.write("@THAT\n");
+            output.write("M=D\n");    // THAT = *(FRAME - 1)
 
-        // Restore ARG
-        output.write("@R13\n");
-        output.write("AM=M-1\n");
-        output.write("D=M\n");
-        output.write("@ARG\n");
-        output.write("M=D\n");
+            // Restore THIS = *(FRAME - 2)
+            output.write("@FRAME\n");
+            output.write("AM=M-1\n"); // FRAME = FRAME - 2
+            output.write("D=M\n");
+            output.write("@THIS\n");
+            output.write("M=D\n");    // THIS = *(FRAME - 2)
 
-        // Restore LCL
-        output.write("@R13\n");
-        output.write("AM=M-1\n");
-        output.write("D=M\n");
-        output.write("@LCL\n");
-        output.write("M=D\n");
+            // Restore ARG = *(FRAME - 3)
+            output.write("@FRAME\n");
+            output.write("AM=M-1\n"); // FRAME = FRAME - 3
+            output.write("D=M\n");
+            output.write("@ARG\n");
+            output.write("M=D\n");    // ARG = *(FRAME - 3)
 
-        // Goto retAddr
-        output.write("@R14\n");
-        output.write("A=M\n");
-        output.write("0;JMP\n");
-    }
+            // Restore LCL = *(FRAME - 4)
+            output.write("@FRAME\n");
+            output.write("AM=M-1\n"); // FRAME = FRAME - 4
+            output.write("D=M\n");
+            output.write("@LCL\n");
+            output.write("M=D\n");    // LCL = *(FRAME - 4)
+
+            // Goto RET
+            output.write("@RET\n");
+            output.write("A=M\n");
+            output.write("0;JMP\n");  // goto RET
+        }
 
 
     private void commonPush() throws IOException {
@@ -413,19 +407,6 @@ public class CodeWriter {
         output.write("M=D\n");
         output.write("@SP\n");
         output.write("M=M+1\n");
-    }
-
-    private void commonPop() throws IOException {
-        output.write("D=D+A\n");
-        output.write("@R13\n");
-        output.write("M=D\n");
-        output.write("@SP\n");
-        output.write("M=M-1\n");
-        output.write("A=M\n");
-        output.write("D=M\n");
-        output.write("@R13\n");
-        output.write("A=M\n");
-        output.write("M=D\n");
     }
 
     public void close() throws IOException {

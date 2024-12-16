@@ -23,10 +23,12 @@ A=M
 M=D
 (LOOP)
 // C_PUSH argument 0
-@ARG
-D=M
 @0
-A=D+A
+D=A
+@ARG
+A=M
+D=D+A
+A=D
 D=M
 @SP
 A=M
@@ -34,10 +36,12 @@ M=D
 @SP
 M=M+1
 // C_PUSH local 0
-@LCL
-D=M
 @0
-A=D+A
+D=A
+@LCL
+A=M
+D=D+A
+A=D
 D=M
 @SP
 A=M
@@ -75,10 +79,12 @@ D=M
 A=M
 M=D
 // C_PUSH argument 0
-@ARG
-D=M
 @0
-A=D+A
+D=A
+@ARG
+A=M
+D=D+A
+A=D
 D=M
 @SP
 A=M
@@ -124,10 +130,12 @@ D=M
 A=M
 M=D
 // C_PUSH argument 0
-@ARG
-D=M
 @0
-A=D+A
+D=A
+@ARG
+A=M
+D=D+A
+A=D
 D=M
 @SP
 A=M
@@ -141,10 +149,12 @@ D=M
 @LOOP
 D;JNE
 // C_PUSH local 0
-@LCL
-D=M
 @0
-A=D+A
+D=A
+@LCL
+A=M
+D=D+A
+A=D
 D=M
 @SP
 A=M
