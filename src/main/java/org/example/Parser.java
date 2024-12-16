@@ -22,11 +22,17 @@ public class Parser {
         while (scanner.hasNextLine()) {
             String temp = scanner.nextLine().trim();
 
+            // Skip empty lines and comments
             if (temp.isEmpty() || temp.startsWith("//")) {
                 continue;
             }
 
-            temp = temp.replaceAll("\t", "").trim(); // Remove all whitespaces
+            // Remove inline comments
+            int commentIndex = temp.indexOf("//");
+            if (commentIndex != -1) {
+                temp = temp.substring(0, commentIndex).trim();
+            }
+
             CmdOnly.add(temp);
         }
         scanner.close();
@@ -59,15 +65,30 @@ public class Parser {
     public String commandType(){
         if (line.startsWith("push")){
             command = "C_PUSH";
-        } else if (line.startsWith("pop")){
+        } else if (line.startsWith("pop")) {
             command = "C_POP";
-        }else{
+        } else if (line.startsWith("goto")) {
+            command = "C_GOTO";
+        } else if (line.startsWith("if")) {
+            command = "C_IF";
+        } else if (line.startsWith("label")) {
+            command = "C_LABEL";
+        } else if (line.startsWith("call")) {
+            command = "C_CALL";
+        } else if (line.startsWith("function")) {
+            command = "C_FUNCTION";
+        } else if (line.startsWith("return")) {
+            command = "C_RETURN";
+        }else {
             command = "C_ARITHMETIC";
         }
         return command;
     }
 
-    public String arg1(){
+    public String arg1() throws IllegalArgumentException{
+        if (command.equals("C_RETURN")) {
+            throw new IllegalArgumentException("C_RETURN command not allowed");
+        }
         if (command.equals("C_ARITHMETIC")){
             return line;
         } else {
@@ -77,7 +98,7 @@ public class Parser {
     }
 
     public Integer arg2() throws IllegalArgumentException{
-        if (command.equals("C_PUSH") || command.equals("C_POP")){
+        if (command.equals("C_PUSH") || command.equals("C_POP") || command.equals("C_FUNCTION") || command.equals("C_CALL")){
             String[] args = line.split(" ");
             return Integer.parseInt(args[2]);
         } else {
